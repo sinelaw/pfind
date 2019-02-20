@@ -182,7 +182,7 @@ pfind_find_results_t * pfind_find(pfind_options_t * lopt){
     //usleep(100000);
     debug("[%d] processing: %d [%d, %d, phase: %d]\n", pfind_rank, pending_work, have_finalize_token, have_processed_work_after_token, phase);
     // do we have more work?
-    if(pending_work > 0 || open_dir != NULL ){
+    if(pending_work > 0){
       if (opt->stonewall_timer && MPI_Wtime() >= runtime.stonewall_endtime ){
         if(opt->verbosity > 1){
           printf("Hit stonewall at %.2fs\n", MPI_Wtime());
@@ -206,7 +206,7 @@ pfind_find_results_t * pfind_find(pfind_options_t * lopt){
     }
 
     // we msg_type our last piece of work
-    if (pending_work == 0 && open_dir == NULL ){
+    if (pending_work == 0){
       // Exit condition requesting_rank
       if (have_finalize_token){
         if (have_processed_work_after_token){
@@ -232,10 +232,8 @@ pfind_find_results_t * pfind_find(pfind_options_t * lopt){
 
     MPI_Status wait_status;
     // check for job-stealing request
-    has_msg = 1;
-    while(has_msg){
-      ret = MPI_Iprobe(MPI_ANY_SOURCE, MSG_JOB_STEAL, MPI_COMM_WORLD, & has_msg, & wait_status);
-      CHECK_MPI
+    ret = MPI_Iprobe(MPI_ANY_SOURCE, MSG_JOB_STEAL, MPI_COMM_WORLD, & has_msg, & wait_status);
+    CHECK_MPI
       if(has_msg){
         int requesting_rank = wait_status.MPI_SOURCE;
         ret = MPI_Recv(NULL, 0, MPI_INT, requesting_rank, MSG_JOB_STEAL, MPI_COMM_WORLD, & wait_status);
@@ -259,7 +257,6 @@ pfind_find_results_t * pfind_find(pfind_options_t * lopt){
         #endif
         CHECK_MPI
       }
-    }
 
     int work_received = 0;
     int steal_neighbor = pfind_rank;
@@ -432,22 +429,14 @@ static void find_do_readdir(char *path) {
       }
     }
     int fd = dirfd(d);
-    int processed = 0;
     while (1) {
         //printf("find_do_readdir %s - %s\n", dir, path);
-        if(processed > opt->max_dirs_per_iter){
-          // break criteria to allow contination of job stealing and such
-          if(open_dir == NULL){
-            strcpy(open_dir_name, path);
-            open_dir = d;
-          }
-          return;
-        }
+
         struct dirent *entry;
         entry = readdir(d);
         if (opt->stonewall_timer && MPI_Wtime() >= runtime.stonewall_endtime ){
           if(opt->verbosity > 1){
-            fprintf(runtime.logfile, "Hit stonewall at %.2fs\n", MPI_Wtime());
+            printf("Hit stonewall at %.2fs\n", MPI_Wtime());
           }
           break;
         }
@@ -458,7 +447,6 @@ static void find_do_readdir(char *path) {
             continue;
         }
         res->checked_dirents++;
-        processed++;
 
         char typ = find_file_type(entry->d_type);
         if (typ == 'u'){
@@ -505,7 +493,6 @@ static void find_do_readdir(char *path) {
             continue;
           }
         }
-
         if(enqueue_work(typ, path, entry->d_name)){
           if(open_dir == NULL){
             strcpy(open_dir_name, path);

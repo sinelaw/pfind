@@ -20,9 +20,7 @@ typedef struct {
   char * name_pattern;
   regex_t name_regex;
   uint64_t size;
-  // optimizing parameters
   int queue_length;
-  int max_dirs_per_iter;
 
   int verbosity;
 } pfind_options_t;
